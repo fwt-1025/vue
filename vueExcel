@@ -1,1 +1,147 @@
-待开发...
+
+<template>
+    <div>
+        <div id="upload" @click="postBut">
+        <i class="el-icon-upload"></i>
+        <div class="upload-text">请选择要上传的文件</div>
+      </div>
+      <div ref='tip'></div>
+        <input type="file" style="visibility: hidden;" multiple="multiple" ref="inputName" @change="handleOk()"  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"/>
+      <p ref="hel"></p>
+    </div>
+</template>
+
+<script>
+export default {
+  data () {
+    return {
+      parmas: []
+    }
+  },
+  methods: {
+    creatP () {
+      // 添加显示文件名，以及删除功能
+      let _this = this
+      let oP = document.createElement('p')
+      oP.style.marginBottom = 10 + 'px'
+      oP.style.height = 60 + 'px'
+      oP.style.lineHeight = 60 + 'px'
+      oP.innerHTML = `
+        ${sessionStorage.getItem('name')}<span style='display:none;float:right;margin-right:15px;cursor:pointer'>x</span>
+      `
+      oP.addEventListener('mouseenter', function () {
+        this.childNodes[1].style.display = 'block'
+        this.style.background = '#9e9e9e'
+        this.style.color = '#fff'
+      })
+      oP.addEventListener('click', function (e) {
+        if (e.target.tagName === 'SPAN') {
+          _this.$refs.tip.removeChild(this)
+        }
+      })
+      oP.addEventListener('mouseleave', function () {
+        this.childNodes[1].style.display = 'none'
+        this.style.background = ''
+        this.style.color = '#000'
+      })
+      _this.$refs.tip.appendChild(oP)
+    },
+    postBut () {
+      // 模拟上传功能
+      let post = this.$refs.inputName
+      post.click()
+    },
+    handleOk () {
+      // 上传文件并解析数据
+      let _this = this
+      let XLSX = require('xlsx')
+      let X = XLSX
+      let rABS = false // 是否转为二进制字符串
+      let files = this.$refs.inputName.files
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i]
+        var reader = new FileReader()
+        var name = f.name
+        sessionStorage.setItem('name', name)
+        reader.onload = function (e) {
+          var data = e.target.result
+          var wb // 读取完成的数据
+          if (rABS) {
+            wb = X.read(data, { type: 'binary' })
+          } else {
+            var arr = fixdata(data) // 手动转化
+            wb = X.read(btoa(arr), { type: 'base64' })
+          }
+          processWb(wb, 'json')
+        }
+        if (rABS) reader.readAsBinaryString(f)
+        else reader.readAsArrayBuffer(f)
+        // _this.$refs.tip.innerHTML = ''
+        _this.creatP()
+      }
+      // 将读取到的数据转为字符串
+      function processWb (wb, type) {
+        var output = ''
+        if (type === 'json') {
+          output = JSON.stringify(toJson(wb), 2, 2)
+          return output
+        }
+      }
+      function fixdata (data) { // 文件流转BinaryString
+        let o = ''
+        let l = 0
+        let w = 10240
+        for (; l < data.byteLength / w; ++l) o += String.fromCharCode.apply(null, new Uint8Array(data.slice(l * w, l * w + w)))
+        o += String.fromCharCode.apply(null, new Uint8Array(data.slice(l * w)))
+        return o
+      }
+      function toJson (workbook) {
+        var result = {}
+        // SheetNames是获取Sheets中Sheet的名字
+        // Sheets[Sheet名]获取第一个Sheet的数据
+        workbook.SheetNames.forEach(function (sheetName) {
+          var roa = XLSX.utils.sheet_to_row_object_array(workbook.Sheets[sheetName])
+          if (roa.length > 0) {
+            result[sheetName] = roa
+          }
+        })
+        let str = result.Sheet1
+        _this.parmas.push(str)
+        console.log(_this.parmas)
+        _this.$emit('postdata', _this.parmas)
+        return result
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+#upload{
+  position: relative;
+  margin:15px 0;
+  width:300px;
+  height:150px;
+  background:rgba(134, 132, 132, 0.5);
+  border-radius:5px;
+  color:#fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.el-icon-upload{
+  display: block;
+  width: 50px;
+  height: 50px;
+  font-size:50px;
+  margin:10px 50px;
+}
+.upload-text{
+  width:200px;
+  position: absolute;
+  bottom:5px;
+  left:50%;
+  margin-left: -75px;
+}
+</style>
