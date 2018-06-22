@@ -1,0 +1,225 @@
+<style lang='less' scoped>
+  .mapContent{
+    position:relative;
+  }
+  #mapContainer {
+    width: 100%;
+    height: 463px
+  }
+   #tip {
+    position: absolute;
+    top:-80px;
+  }
+  #tip .el-input{
+    width:179px;
+    margin-right:0px;
+  }
+  #tip .el-select{width:179px;margin-right:10px;}
+</style>
+
+<template>
+<div class="mapContent">
+  <div id="mapContainer"></div>
+  <div id="tip">
+    <el-select
+    v-model="province"
+    @change="selectP"
+    >
+      <el-option
+      v-for="item in provinces"
+      :key='item.name'
+      :label='item.name'
+      :value='item.name'
+      >
+      </el-option>
+    </el-select>
+    <el-select
+    v-model="city"
+    @change="selectC"
+    >
+      <el-option
+      v-for="item in citys"
+      :key='item.name'
+      :label='item.name'
+      :value='item.name'
+      >
+      </el-option>
+    </el-select>
+    <el-select
+    v-model="district"
+    @change="selectD"
+    >
+      <el-option
+      v-for="item in districts"
+      :key='item.name'
+      :label='item.name'
+      :value='item.name'
+      >
+      </el-option>
+    </el-select>
+    <el-input id="searchValue" placeholder="地址、街道、房屋名称" v-model="address" clearable></el-input>
+  </div>
+</div>
+</template>
+
+<script>
+import AMap from 'AMap'
+import image from '../assets/images/ic_locationmarker.png'
+export default {
+  data () {
+    return {
+      address: '',
+      map: null,
+      provinces: [],
+      province: '',
+      districts: [],
+      district: '',
+      citys: [],
+      bounds: [],
+      polygons: [],
+      city: ''
+    }
+  },
+  // props: ['addressPoint'],
+  mounted () {
+    var that = this
+    this.map = new AMap.Map('mapContainer', {
+      resizeEnable: true,
+      zoom: 13
+    })
+    AMap.plugin(['AMap.Autocomplete', 'AMap.PlaceSearch', 'AMap.Geocoder', 'AMap.Geolocation'], function () {
+      var autocomplete = new AMap.Autocomplete({
+        input: 'searchValue'
+      })
+      var placeSearch = new AMap.PlaceSearch({
+        city: '北京市',
+        map: that.map
+      })
+      AMap.event.addListener(autocomplete, 'select', function (e) {
+        console.log(e)
+        placeSearch.setCity(e.poi.adcode)
+        placeSearch.search(e.poi.name)// 关键字查询查询
+      })
+      // 定位
+      var geolocation = new AMap.Geolocation({
+        enableHighAccuracy: true, // 是否使用高精度定位，默认:true
+        timeout: 10000, // 超过10秒后停止定位，默认：无穷大
+        buttonOffset: new AMap.Pixel(10, 20), // 定位按钮与设置的停靠位置的偏移量，默认：Pixel(10, 20)
+        zoomToAccuracy: true, // 定位成功后调整地图视野范围使定位位置及精度范围视野内可见，默认：false
+        buttonPosition: 'RB'
+      })
+      // that.map.addControl(geolocation)
+      geolocation.getCurrentPosition()
+      // 定位定点
+      AMap.event.addListener(geolocation, 'complete', function (e) {
+        marker.setPosition(e.position)
+      }) // 返回定位信息
+      // 经纬度
+      var geocoder = new AMap.Geocoder({
+        radius: 1000
+      })
+      var marker = new AMap.Marker({
+        icon: new AMap.Icon({
+          size: new AMap.Size(36, 44),
+          image: image
+        }),
+        map: that.map
+      })
+      that.map.on('click', function (e) {
+        for (var i = 0, l = that.polygons.length; i < l; i++) {
+          that.polygons[i].setMap(null)
+        }
+        marker.setMap(that.map)
+        marker.setPosition(e.lnglat)
+        geocoder.getAddress(e.lnglat, function (status, result) {
+          if (status === 'complete') {
+            var obj = {}
+            obj.province = result.regeocode.addressComponent.province
+            obj.city = result.regeocode.addressComponent.city
+            obj.district = result.regeocode.addressComponent.district
+            obj.formattedAddress = result.regeocode.formattedAddress
+            that.address = result.regeocode.formattedAddress
+            obj.lat = e.lnglat.lat
+            obj.lng = e.lnglat.lng
+            that.$emit('pickedAddress', obj)
+            that.province = obj.province
+            that.city = obj.city
+            that.district = obj.district
+          } else {
+            that.$emit('pickedAddress', '')
+          }
+        })
+      })
+    })
+    this.loadmap()
+  },
+  methods: {
+    loadmap (val) {
+      let params = val
+      var that = this
+      // 插件
+      AMap.plugin(['AMap.DistrictSearch', 'AMap.Polygon'], function () {
+        // 标注
+        var opts = {
+          subdistrict: 1,
+          extensions: 'all',
+          showbiz: false
+        }
+        var district = new AMap.DistrictSearch(opts)// 注意：需要使用插件同步下发功能才能这样直接使用
+        function getData (data) {
+          // 清除地图上的所有覆盖物
+          for (var j = 0, k = that.polygons.length; j < k; j++) {
+            that.polygons[j].setMap(null)
+          }
+          that.bounds.push(data.boundaries)
+          if (data.level === 'country') {
+            that.provinces = data.districtList
+          } else if (data.level === 'province') {
+            that.citys = data.districtList
+          } else {
+            that.districts = data.districtList
+          }
+          if (data.level === 'country' && that.bounds) {
+            return false
+          } else {
+            for (var i = 0, l = that.bounds.length; i < l; i++) {
+              var polygon = new AMap.Polygon({
+                map: that.map,
+                strokeWeight: 1,
+                strokeColor: '#CC66CC',
+                fillColor: '#CCF3FF',
+                fillOpacity: 0.5,
+                path: that.bounds[i]
+              })
+              that.polygons.push(polygon)
+            }
+            that.map.setFitView()
+          }
+        }
+        let sear = val ? params : '中国'
+        district.search(sear, function (status, result) {
+          if (status === 'complete') {
+            getData(result.districtList[0])
+          }
+        })
+      })
+    },
+    selectP () {
+      this.bounds = []
+      this.loadmap(this.province)
+      this.city = ''
+      this.district = ''
+    },
+    selectC () {
+      console.log(this.city)
+      this.bounds = []
+      this.loadmap(this.city)
+      this.district = ''
+    },
+    selectD () {
+      this.bounds = []
+      this.loadmap(this.district)
+    }
+  }
+}
+</script>
