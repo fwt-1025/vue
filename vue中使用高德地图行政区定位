@@ -4,42 +4,45 @@
   }
   #mapContainer {
     width: 100%;
-    height: 463px
+    height: 500px
   }
    #tip {
     position: absolute;
-    top:-80px;
+    top:-60px;
   }
   #tip .el-input{
     width:179px;
     margin-right:0px;
   }
-  #tip .el-select{width:179px;margin-right:10px;}
+  #tip .el-select{margin-right:10px;}
+  #tip .el-select{width:179px}
 </style>
 
 <template>
 <div class="mapContent">
   <div id="mapContainer"></div>
-  <div id="tip">
+  <div id="tip" v-show="showFlag === false ? false : true">
     <el-select
     v-model="province"
     @change="selectP"
+    placeholder='省'
     >
       <el-option
       v-for="item in provinces"
-      :key='item.name'
+      :key='item.adcode'
       :label='item.name'
-      :value='item.name'
+      :value='item.adcode'
       >
       </el-option>
     </el-select>
     <el-select
     v-model="city"
     @change="selectC"
+    placeholder='市'
     >
       <el-option
       v-for="item in citys"
-      :key='item.name'
+      :key='item.adcode'
       :label='item.name'
       :value='item.name'
       >
@@ -48,16 +51,17 @@
     <el-select
     v-model="district"
     @change="selectD"
+    placeholder='区'
     >
       <el-option
       v-for="item in districts"
-      :key='item.name'
+      :key='item.adcode'
       :label='item.name'
-      :value='item.name'
+      :value='item.adcode'
       >
       </el-option>
     </el-select>
-    <el-input id="searchValue" placeholder="地址、街道、房屋名称" v-model="address" clearable></el-input>
+    <el-input id="searchValue" placeholder="地址" v-model="address" clearable></el-input>
   </div>
 </div>
 </template>
@@ -68,89 +72,114 @@ import image from '../assets/images/ic_locationmarker.png'
 export default {
   data () {
     return {
-      address: '',
+      // address: '',
       map: null,
       provinces: [],
       province: '',
       districts: [],
       district: '',
       citys: [],
-      bounds: [],
+      city: '',
+      // bounds: [],
       polygons: [],
-      city: ''
+      areacode: '',
+      address: '',
+      objPoint: []
     }
   },
-  // props: ['addressPoint'],
+  props: ['flagVisible', 'position'],
+  computed: {
+    showFlag () {
+      return this.flagVisible
+    }
+  },
   mounted () {
-    var that = this
-    this.map = new AMap.Map('mapContainer', {
-      resizeEnable: true,
-      zoom: 13
-    })
-    AMap.plugin(['AMap.Autocomplete', 'AMap.PlaceSearch', 'AMap.Geocoder', 'AMap.Geolocation'], function () {
-      var autocomplete = new AMap.Autocomplete({
-        input: 'searchValue'
+    setTimeout(() => {
+      var that = this
+      this.map = new AMap.Map('mapContainer', {
+        resizeEnable: true,
+        zoom: 10
       })
-      var placeSearch = new AMap.PlaceSearch({
-        city: '北京市',
-        map: that.map
-      })
-      AMap.event.addListener(autocomplete, 'select', function (e) {
-        console.log(e)
-        placeSearch.setCity(e.poi.adcode)
-        placeSearch.search(e.poi.name)// 关键字查询查询
-      })
-      // 定位
-      var geolocation = new AMap.Geolocation({
-        enableHighAccuracy: true, // 是否使用高精度定位，默认:true
-        timeout: 10000, // 超过10秒后停止定位，默认：无穷大
-        buttonOffset: new AMap.Pixel(10, 20), // 定位按钮与设置的停靠位置的偏移量，默认：Pixel(10, 20)
-        zoomToAccuracy: true, // 定位成功后调整地图视野范围使定位位置及精度范围视野内可见，默认：false
-        buttonPosition: 'RB'
-      })
-      // that.map.addControl(geolocation)
-      geolocation.getCurrentPosition()
-      // 定位定点
-      AMap.event.addListener(geolocation, 'complete', function (e) {
-        marker.setPosition(e.position)
-      }) // 返回定位信息
-      // 经纬度
-      var geocoder = new AMap.Geocoder({
-        radius: 1000
-      })
-      var marker = new AMap.Marker({
+      this.marker = new AMap.Marker({
         icon: new AMap.Icon({
           size: new AMap.Size(36, 44),
           image: image
         }),
         map: that.map
       })
-      that.map.on('click', function (e) {
-        for (var i = 0, l = that.polygons.length; i < l; i++) {
-          that.polygons[i].setMap(null)
-        }
-        marker.setMap(that.map)
-        marker.setPosition(e.lnglat)
-        geocoder.getAddress(e.lnglat, function (status, result) {
-          if (status === 'complete') {
-            var obj = {}
-            obj.province = result.regeocode.addressComponent.province
-            obj.city = result.regeocode.addressComponent.city
-            obj.district = result.regeocode.addressComponent.district
-            obj.formattedAddress = result.regeocode.formattedAddress
-            that.address = result.regeocode.formattedAddress
-            obj.lat = e.lnglat.lat
-            obj.lng = e.lnglat.lng
-            that.$emit('pickedAddress', obj)
-            that.province = obj.province
-            that.city = obj.city
-            that.district = obj.district
-          } else {
-            that.$emit('pickedAddress', '')
-          }
+      AMap.plugin(['AMap.Autocomplete', 'AMap.PlaceSearch', 'AMap.Geocoder'], function () {
+        var autocomplete = new AMap.Autocomplete({
+          input: 'searchValue'
         })
+        var placeSearch = new AMap.PlaceSearch({
+          city: that.acode,
+          citylimit: true,
+          pageSize: 1,
+          pageIndex: 1,
+          map: that.map
+        })
+        AMap.event.addListener(autocomplete, 'select', function (e) {
+          that.marker.setMap(that.map)
+          that.marker.setPosition(e.poi.location)
+          placeSearch.search(e.poi.name)// 关键字查询查询
+          that.address = e.poi.name
+          let obj = {}
+          obj.name = e.poi.name
+          obj.areacode = e.poi.adcode
+          obj.lat = e.poi.location.lat
+          obj.lng = e.poi.location.lng
+          that.$emit('searchAddress', obj)
+        })
+        // 经纬度
+        var geocoder = new AMap.Geocoder({
+          radius: 1000
+        })
+        that.map.on('click', function (e) {
+          for (var i = 0, l = that.polygons.length; i < l; i++) {
+            that.polygons[i].setMap(null)
+          }
+          that.marker.setMap(that.map)
+          that.marker.setPosition(e.lnglat)
+          geocoder.getAddress(e.lnglat, function (status, result) {
+            if (status === 'complete') {
+              var obj = {}
+              that.province = result.regeocode.addressComponent.province
+              that.city = result.regeocode.addressComponent.city
+              that.district = result.regeocode.addressComponent.district
+              obj.formattedAddress = result.regeocode.formattedAddress
+              obj.areacode = result.regeocode.addressComponent.adcode
+              that.address = result.regeocode.formattedAddress
+              obj.lat = e.lnglat.lat
+              obj.lng = e.lnglat.lng
+              that.$emit('pickedAddress', obj)
+            } else {
+              that.$emit('pickedAddress', '')
+            }
+          })
+        })
+        // 根据坐标点定位,获取地址的详细信息
+        if (that.position) {
+          that.marker.setMap(that.map)
+          that.marker.setPosition(that.position)
+          geocoder.getAddress(that.position, function (status, result) {
+            if (status === 'complete') {
+              console.log(result)
+              var obj = {}
+              obj.formattedAddress = result.regeocode.formattedAddress
+              obj.areacode = result.regeocode.addressComponent.adcode
+              that.address = result.regeocode.formattedAddress
+              that.$emit('positionAddress', obj)
+              that.province = result.regeocode.addressComponent.province
+              that.city = result.regeocode.addressComponent.city
+              that.district = result.regeocode.addressComponent.district
+            }
+          })
+          that.map.setFitView()
+        } else {
+          return false
+        }
       })
-    })
+    }, 500)
     this.loadmap()
   },
   methods: {
@@ -158,6 +187,9 @@ export default {
       let params = val
       var that = this
       // 插件
+      for (var j = 0, k = that.polygons.length; j < k; j++) {
+        that.polygons[j].setMap(null)
+      }
       AMap.plugin(['AMap.DistrictSearch', 'AMap.Polygon'], function () {
         // 标注
         var opts = {
@@ -168,28 +200,33 @@ export default {
         var district = new AMap.DistrictSearch(opts)// 注意：需要使用插件同步下发功能才能这样直接使用
         function getData (data) {
           // 清除地图上的所有覆盖物
-          for (var j = 0, k = that.polygons.length; j < k; j++) {
-            that.polygons[j].setMap(null)
-          }
-          that.bounds.push(data.boundaries)
+          // console.log(data)
+          that.areacode = data.citycode
+          var bounds = data.boundaries
           if (data.level === 'country') {
+            console.log(data.districtList)
             that.provinces = data.districtList
+            that.citys = []
+            that.districts = []
           } else if (data.level === 'province') {
+            that.map.remove(that.marker)
             that.citys = data.districtList
-          } else {
+            that.districts = []
+            that.address = ''
+          } else if (data.level === 'city') {
             that.districts = data.districtList
           }
-          if (data.level === 'country' && that.bounds) {
+          if (data.level === 'country' && bounds) {
             return false
           } else {
-            for (var i = 0, l = that.bounds.length; i < l; i++) {
+            for (var i = 0, l = bounds.length; i < l; i++) {
               var polygon = new AMap.Polygon({
                 map: that.map,
                 strokeWeight: 1,
                 strokeColor: '#CC66CC',
                 fillColor: '#CCF3FF',
                 fillOpacity: 0.5,
-                path: that.bounds[i]
+                path: bounds[i]
               })
               that.polygons.push(polygon)
             }
@@ -204,21 +241,17 @@ export default {
         })
       })
     },
-    selectP () {
-      this.bounds = []
-      this.loadmap(this.province)
+    selectP (val) {
+      this.loadmap(val)
       this.city = ''
       this.district = ''
     },
-    selectC () {
-      console.log(this.city)
-      this.bounds = []
-      this.loadmap(this.city)
+    selectC (val) {
+      this.loadmap(val)
       this.district = ''
     },
-    selectD () {
-      this.bounds = []
-      this.loadmap(this.district)
+    selectD (val) {
+      this.loadmap(val)
     }
   }
 }
