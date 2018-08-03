@@ -1,0 +1,211 @@
+<style>
+.container{
+  position: relative;
+}
+#mapContainer{
+  width: 100%;
+  height: 900px
+}
+.info {
+  border:1px solid silver;
+  width:300px;
+  height:150px;
+  background:#fff;
+}
+div.info-top {
+    position: relative;
+    background: none repeat scroll 0 0 #F9F9F9;
+    border-bottom: 1px solid #CCC;
+    border-radius: 5px 5px 0 0;
+}
+div.info-top div {
+    display: inline-block;
+    color: #333333;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 31px;
+    padding: 0 10px;
+}
+div.info-top img {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    transition-duration: 0.25s;
+}
+div.info-top img:hover {
+    box-shadow: 0px 0px 5px #000;
+}
+div.info-middle {
+    font-size: 12px;
+    padding: 6px;
+    line-height: 20px;
+}
+div.info-bottom {
+    height: 0px;
+    width: 100%;
+    clear: both;
+    text-align: center;
+}
+div.info-bottom img {
+    position: relative;
+    z-index: 104;
+}
+span {
+    margin-left: 5px;
+    font-size: 11px;
+}
+.info-middle img {
+    float: left;
+    margin-right: 6px;
+}
+</style>
+<template>
+  <div>
+    <div class="container">
+      <div id="mapContainer"></div>
+    </div>
+  </div>
+</template>
+
+<script>
+import image from '@/assets/images/car_img_car.png'
+import AMap from 'AMap'
+import address from '@/utils/address.json'
+export default {
+  data () {
+    return {
+      map: null,
+      marker: null,
+      markers: []
+    }
+  },
+  created () {
+    this.$store.commit('setActiveMenu', '/map')
+  },
+  mounted () {
+    this.init()
+  },
+  methods: {
+    init () {
+      var that = this
+      this.map = new AMap.Map('mapContainer', {
+        zoom: 5,
+        center: [105,34],
+        resizeEnable: true,
+        // mapStyle: 'amap://styles/daba6eccb86d4d3980ef1ed2c7b9e5ab'
+        mapStyle: 'amap://styles/36c4efa97ed442fb389f2f2306c3639a'
+      })
+       var colors = [
+        "#3366cc", "#dc3912", "#ff9900", "#109618", "#990099", "#0099c6", "#dd4477", "#66aa00",
+        "#b82e2e", "#316395", "#994499", "#22aa99", "#aaaa11", "#6633cc", "#e67300", "#8b0707",
+        "#651067", "#329262", "#5574a6", "#3b3eac"
+      ];
+    // 行政区划分(颜色)
+    AMapUI.loadUI(['geo/DistrictExplorer'], function(DistrictExplorer) {
+
+      //创建一个实例
+        var districtExplorer = new DistrictExplorer({
+          map: that.map
+        });
+        console.log(districtExplorer)
+
+        
+        var adcode = 100000;
+
+        districtExplorer.loadAreaNode(adcode, function(error, areaNode) {
+            console.log(areaNode)
+            //更新地图视野
+            that.map.setBounds(areaNode.getBounds(), null, null, true);
+
+            //清除已有的绘制内容
+            districtExplorer.clearFeaturePolygons();
+
+            //绘制子区域
+            districtExplorer.renderSubFeatures(areaNode, function(feature, i) {
+                console.log('i======>', i)
+                var fillColor = colors[i % colors.length];
+                var strokeColor = colors[colors.length - 1 - i % colors.length];
+
+                return {
+                    cursor: 'default',
+                    bubble: true,
+                    strokeColor: strokeColor, //线颜色
+                    strokeOpacity: 1, //线透明度
+                    strokeWeight: 1, //线宽
+                    fillColor: fillColor, //填充色
+                    fillOpacity: 0.35, //填充透明度
+                };
+            });
+
+            //绘制父区域
+            districtExplorer.renderParentFeature(areaNode, {
+                cursor: 'default',
+                bubble: true,
+                strokeColor: 'black', //线颜色
+                strokeOpacity: 1, //线透明度
+                strokeWeight: 1, //线宽
+                fillColor: null, //填充色
+                fillOpacity: 0.35, //填充透明度
+            });
+        });
+    })
+      // this.$http.get('http://a.amap.com/jsapi_demos/static/china.js').then(res => res.json()).then(result => {console.log(result)})
+      // console.log(res[0]['lnglat'])
+      address.data.map(item => {
+        this.marker = new AMap.Marker({
+          position: item['lnglat'],
+          content: `<img src='${image}' width='50px' height='24px'>`,
+          // offset: new AMap.Pixel(-15,-15),
+          clickable: true
+        })
+        this.markers.push(this.marker)
+        AMap.event.addListener(this.marker, 'click', (e) => {
+          var infoWindow = new AMap.InfoWindow({
+            isCustom: true,
+            content: that.creatInfoWindow(item['lnglat']),
+            offset: new AMap.Pixel(40, -40)
+          })
+          infoWindow.open(this.map, item['lnglat'])
+        })
+      })
+      AMap.plugin(['AMap.MarkerClusterer'], function (e) {
+        var cluster = new AMap.MarkerClusterer(that.map, that.markers, {gridSize:60})
+      })
+    },
+    creatInfoWindow (content) {
+      var oDiv = document.createElement('div')
+      oDiv.className = 'info'
+      var top = document.createElement('div')
+      var titleD = document.createElement('div')
+      var closeX = document.createElement('img')
+      top.className='info-top'
+      titleD.innerHTML = 'hello World'
+      closeX.src = 'https://webapi.amap.com/images/close2.gif'
+      closeX.onclick = this.closeInfoWindow
+
+      top.appendChild(titleD);
+      top.appendChild(closeX);
+      oDiv.appendChild(top);
+
+      // 定义中部内容
+      var middle = document.createElement("div");
+      middle.className = "info-middle";
+      middle.style.backgroundColor = 'white';
+      middle.innerHTML = `<div>此车在${content}</div>`;
+      oDiv.appendChild(middle);
+
+      // 定义底部内容
+      var bottom = document.createElement("div");
+      bottom.className = "info-bottom";
+      bottom.style.position = 'relative';
+      bottom.style.top = '0px';
+      bottom.style.margin = '0 auto';
+      oDiv.appendChild(bottom);
+      return oDiv;
+    },
+    closeInfoWindow () {
+      this.map.clearInfoWindow()
+    }
+  }
+}
+</script>
